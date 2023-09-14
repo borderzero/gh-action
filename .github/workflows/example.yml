@@ -26,7 +26,7 @@ jobs:
         if: ${{ failure() || (github.event_name == 'workflow_dispatch' && inputs.debug) }}
         # alternatively only run on failure
         # if: ${{ failure() }}
-        uses: borderzero/gh-action@github-action-initial-version
+        uses: borderzero/gh-action@main
         with:
           token: ${{ secrets.BORDER0_ADMIN_TOKEN }}
           # optional, if given, Border0 action will send a slack notification when the action is triggered
