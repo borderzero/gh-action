@@ -1,6 +1,9 @@
-name: Border0 action companion for GitHub Actions
+name: Border0 action for debugging
+description: Border0 action companion for debugging in GitHub Actions
+author: Border0
 branding:
   icon: terminal
+  color: orange
 
 inputs:
   token:
