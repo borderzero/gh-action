@@ -1,104 +1,26 @@
-name: Border0 action for debugging
-description: Border0 action companion for debugging in GitHub Actions
-author: Border0
-branding:
-  icon: terminal
-  color: orange
-
+name: 'Start Border0'
+description: 'Downloads and starts Border0 binary and runs cleanup tasks'
 inputs:
   token:
-    description: Border0 access token
+    description: 'Admin token'
     required: true
-    type: string
   slack-webhook-url:
-    description: Slack webhook URL for notification
+    description: 'Sack webhook URL'
     required: false
-    type: string
+    default: ''
+  background-mode:
+    description: 'Run in the background'
+    required: false
+    default: 'false'
+  clean-up-mode:
+    description: 'Perform cleanup only'
+    required: false
+    default: 'false'
+  wait-for:
+    description: 'Wait for specified minutes before proceeding'
+    required: false
+    default: '15'
 
 runs:
-  using: composite
-  steps:
-    - name: Download border0 CLI
-      shell: bash
-      run: |
-        sudo curl https://download.border0.com/linux_amd64/border0 -o /usr/bin/border0
-        sudo chmod +x /usr/bin/border0
-    - name: Create an SSH socket
-      shell: bash
-      env:
-        BORDER0_ADMIN_TOKEN: ${{ inputs.token }}
-        GITHUB_SERVER_URL: ${{ github.server_url }}
-        GITHUB_REPOSITORY: ${{ github.repository }}
-        GITHUB_RUN_ID: ${{ github.run_id }}
-        GITHUB_WORKFLOW_NAME: ${{ github.workflow }}
-        GITHUB_ACTOR_NAME: ${{ github.actor }}
-        GITHUB_JOB_STATUS: ${{ job.status }}
-        SLACK_WEBHOOK_URL: ${{ inputs.slack-webhook-url }}
-      run: |
-        SOCKET_NAME=${GITHUB_REPOSITORY//\//-}-$GITHUB_RUN_ID
-        SSH_USERNAME=$(whoami)
-        WORKFLOW_RUN_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-        ICON_EMOJI=""
-        JOB_STATUS=""
-        if [ "$GITHUB_JOB_STATUS" = "failure" ]; then
-          ICON_EMOJI=":large_yellow_circle:"
-          JOB_STATUS="failed"
-        elif [ "$GITHUB_JOB_STATUS" = "success" ]; then
-          ICON_EMOJI=":large_blue_circle:"
-          JOB_STATUS="succeeded"
-        else
-          ICON_EMOJI=":large_blue_circle:"
-          JOB_STATUS="$GITHUB_JOB_STATUS"
-        fi
-        echo "socket_name=$socket_name" >> $GITHUB_OUTPUT
-        border0 socket create --type ssh --name $SOCKET_NAME --upstream_username $SSH_USERNAME
-        SOCKET_DNS_NAME=$(border0 socket ls | grep "$SOCKET_NAME-" | awk -F '│' '{print $4}' | xargs)
-        echo
-        echo "GitHub Workflow Run ${JOB_STATUS}: ${GITHUB_WORKFLOW_NAME} (${WORKFLOW_RUN_URL})"
-        echo
-        echo "Hey, ${GITHUB_ACTOR_NAME}. Your github workflow run ${JOB_STATUS}. We left it running for you. Click the link below to log in and troubleshoot:"
-        echo "https://client.border0.com/#/ssh/${SOCKET_DNS_NAME}"
-        echo
-        echo "Alternatively, use the following command to ssh into this GitHub VM:"
-        echo "$> border0 client ssh $SSH_USERNAME@$SOCKET_DNS_NAME"
-        echo
-        if [ -n "$SLACK_WEBHOOK_URL" ]; then
-          curl -X POST $SLACK_WEBHOOK_URL \
-            -H 'Content-type: application/json' \
-            --data-binary @- << EOF
-            {
-              "blocks": [
-                {
-                  "type": "section",
-                  "text": {
-                    "type": "mrkdwn",
-                    "text": "${ICON_EMOJI} GitHub Workflow Run <${WORKFLOW_RUN_URL}|${GITHUB_WORKFLOW_NAME}> *${JOB_STATUS}* ${ICON_EMOJI}"
-                  }
-                },
-                {
-                  "type": "section",
-                  "text": {
-                    "type": "mrkdwn",
-                    "text": "Hey, ${GITHUB_ACTOR_NAME}. Your github workflow run ${JOB_STATUS}. We left it running for you. Click the link below to log in and troubleshoot:"
-                  }
-                },
-                {
-                  "type": "section",
-                  "text": {
-                    "type": "mrkdwn",
-                    "text": "https://client.border0.com/#/ssh/${SOCKET_DNS_NAME}"
-                  }
-                }
-              ]
-            }
-        EOF
-        fi
-        border0 socket connect $SOCKET_NAME --sshserver
-    - name: Cleanup
-      shell: bash
-      env:
-        BORDER0_ADMIN_TOKEN: ${{ inputs.token }}
-        BORDER0_SOCKET_NAME: ${{ steps.vars.outputs.socket_name }}
-      run: |
-        border0 socket delete $BORDER0_SOCKET_NAME
-      if: always()
+  using: 'node16'
+  main: 'index.js'
