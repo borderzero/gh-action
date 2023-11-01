@@ -26,9 +26,9 @@ jobs:
         if: ${{ failure() || (github.event_name == 'workflow_dispatch' && inputs.debug) }}
         # alternatively only run on failure
         # if: ${{ failure() }}
-        uses: borderzero/gh-action@main
+        uses: borderzero/gh-action@v2
         with:
           token: ${{ secrets.BORDER0_ADMIN_TOKEN }}
           # optional, if given, Border0 action will send a slack notification when the action is triggered
           slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
-        timeout-minutes: 15
+          wait-for: 15
