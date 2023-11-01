@@ -8,8 +8,6 @@ To get started with this action, you'll need to [register a Border0 account](htt
 by going to [Border0 Admin Portal](https://portal.border0.com) -> Organization Settings -> Access Tokens, create a token in `Admin` permission groups,
 and then add the token in your GitHub repository's secrets.
 
-**NOTE**: Be sure to configure a timeout, as the default GitHub action timeout is set to 360 minutes (6 hours).
-
 ```yaml
 name: My Workflow
 on: [push]
@@ -19,10 +17,20 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: Setup Border0 action
-        uses: borderzero/gh-action@v1
+        uses: borderzero/gh-action@v2
         with:
           token: ${{ secrets.BORDER0_ADMIN_TOKEN }}
-        timeout-minutes: 15
+          background-mode: true
+
+      - name: Your steps here
+        run: echo border0
+
+      - name: Clean-up for Border0
+        if: always()
+        uses: borderzero/gh-action@v2
+        with:
+          token: ${{ secrets.BORDER0_ADMIN_TOKEN }}
+          clean-up-mode: true
 ```
 
 Once the `Setup Border0 action` has been run, a Border0 SSH socket will be created. It will then appear on the `Sockets` page
@@ -37,6 +45,8 @@ The name of the SSH debug socket will follow this naming convention:
 ## Automatically trigger on failure
 
 Add `if: ${{ failure() }}` to your Border0 action, and the action will only be triggered when previous steps in the job fail.
+**NOTE**: Be sure to configure a wait
+
 
 ```yaml
 name: My Workflow
@@ -48,10 +58,10 @@ jobs:
       - uses: actions/checkout@v3
       - name: Setup Border0 action
         if: ${{ failure() }}
-        uses: borderzero/gh-action@v1
+        uses: borderzero/gh-action@v2
         with:
           token: ${{ secrets.BORDER0_ADMIN_TOKEN }}
-        timeout-minutes: 15
+          wait-for: 15
 ```
 
 ## Slack notification
@@ -69,11 +79,11 @@ jobs:
       - uses: actions/checkout@v3
       - name: Setup Border0 action
         if: ${{ failure() }}
-        uses: borderzero/gh-action@v1
+        uses: borderzero/gh-action@v2
         with:
           token: ${{ secrets.BORDER0_ADMIN_TOKEN }}
           slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
-        timeout-minutes: 15
+          wait-for: 15
 ```
 
 ## Manually trigger for debug
@@ -99,8 +109,8 @@ jobs:
       - uses: actions/checkout@v3
       - name: Setup Border0 action
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug }}
-        uses: borderzero/gh-action@v1
+        uses: borderzero/gh-action@v2
         with:
           token: ${{ secrets.BORDER0_ADMIN_TOKEN }}
-        timeout-minutes: 15
+          wait-for: 15
 ```

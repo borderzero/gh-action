@@ -1,8 +1,12 @@
-name: 'Start Border0'
-description: 'Downloads and starts Border0 binary and runs cleanup tasks'
+name: Border0
+description: Border0 for GitHub Actions
+author: Border0
+branding:
+  icon: terminal
+  color: orange
 inputs:
   token:
-    description: 'Admin token'
+    description: 'API token'
     required: true
   slack-webhook-url:
     description: 'Sack webhook URL'
@@ -17,10 +21,11 @@ inputs:
     required: false
     default: 'false'
   wait-for:
-    description: 'Wait for specified minutes before proceeding'
+    description: 'Wait for n minutes before cleaning up'
     required: false
     default: '15'
 
 runs:
   using: 'node16'
   main: 'index.js'
+
