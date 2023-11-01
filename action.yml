@@ -1,5 +1,5 @@
 name: Border0
-description: Border0 for GitHub Actions
+description: SSH access to your GitHub Actions VM using Border0
 author: Border0
 branding:
   icon: terminal
