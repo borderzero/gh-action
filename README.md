@@ -1,6 +1,7 @@
-# gh-action
+# SSH Shell Access to your GitHub actions VM
 
-Border0 action companion for debugging in GitHub Actions.
+Have you ever had a GitHub action fail and wish you could just quickly log in to the build vm to troubleshoot? Well, good news! That's what you can do with this action! with just a few lines of yaml you can get a shell to your runner vm.
+For more details also see: https://www.border0.com/blogs/ssh-shell-access-to-your-github-actions-vm
 
 ## Quickstart
 
