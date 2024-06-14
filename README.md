@@ -6,8 +6,7 @@ For more details also see: https://www.border0.com/blogs/ssh-shell-access-to-you
 ## Quickstart
 
 To get started with this action, you'll need to [register a Border0 account](https://portal.border0.com/register), and generate an admin token
-by going to [Border0 Admin Portal](https://portal.border0.com) -> Organization Settings -> Access Tokens, create a token in `Admin` permission groups,
-and then add the token in your GitHub repository's secrets.
+by going to [Border0 Admin Portal](https://portal.border0.com) -> Team -> Service Accounts, create a new service account, then create a token with `Admin` permissions for the service account, and then add the token in your GitHub repository's secrets. More on service accounts here: https://docs.border0.com/docs/service-accounts
 
 ```yaml
 name: My Workflow
@@ -40,7 +39,7 @@ in the [Border0 Admin Portal](https://portal.border0.com).
 The name of the SSH debug socket will follow this naming convention:
 
 ```
-{github-org-name}-{github-repo-name}-{github-workflow-run-id}
+{github-org-name}-{github-repo-name}-{github-workflow-run-id}-{github-workflow-run-attempt}
 ```
 
 ## Automatically trigger on failure

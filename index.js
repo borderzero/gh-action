@@ -193,7 +193,8 @@ async function run() {
       BORDER0_ADMIN_TOKEN: token
     };
     const repoStr = process.env.GITHUB_REPOSITORY.replace(/\//g, '-');
-    const socketName = `${repoStr}-${process.env.GITHUB_RUN_ID}`;
+    // Adding run attempt to the socket name to avoid conflicts (based on community feedback)
+    const socketName = `${repoStr}-${process.env.GITHUB_RUN_ID}-${process.env.GITHUB_RUN_ATTEMPT}`;
     const githubActionPath = process.env.GITHUB_ACTION_PATH || '/tmp/';
 
     // We don't need to create a socket if we are running cleanup
