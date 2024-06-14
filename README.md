@@ -40,7 +40,7 @@ in the [Border0 Admin Portal](https://portal.border0.com).
 The name of the SSH debug socket will follow this naming convention:
 
 ```
-{github-org-name}-{github-repo-name}-{github-workflow-run-id}
+{github-org-name}-{github-repo-name}-{github-workflow-run-id}-{github-workflow-run-attempt}
 ```
 
 ## Automatically trigger on failure
