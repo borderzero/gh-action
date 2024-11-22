@@ -184,6 +184,7 @@ async function createSocketIfNeeded(env, socketName, slackWebhookUrl, token) {
 async function run() {
   try {
     const token = core.getInput('token');
+    const sshUsername = os.userInfo().username;
     const slackWebhookUrl = core.getInput('slack-webhook-url');
     const backgroundMode = core.getInput('background-mode') === 'true';
     const cleanUP = core.getInput('clean-up-mode') === 'true';
@@ -226,7 +227,7 @@ async function run() {
     let bgModeProc;
     const isBoRunning = spawnSync('pgrep', ['-f', `sh -c ./border0 socket connect`]).status === 0;
     if (!isBoRunning) {
-      const connectSocketCommand = `./border0 socket connect ${socketName} --sshserver`;
+      const connectSocketCommand = `./border0 socket connect ${socketName} --sshserver --upstream_username ${sshUsername}`;
 
       bgModeProc = spawn(connectSocketCommand, {
         shell: true,
