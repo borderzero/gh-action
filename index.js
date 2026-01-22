@@ -190,7 +190,20 @@ async function run() {
 
       await new Promise(resolve => setTimeout(resolve, waitForMinutes * 60 * 1000));
       clearInterval(checkInterval);
-      console.log('Wait time completed. Exiting...');
+      console.log('Wait time completed. Terminating connector...');
+
+      // Kill the connector process
+      connectorProc.kill('SIGTERM');
+
+      // Give it a moment to exit gracefully, then force kill if needed
+      setTimeout(() => {
+        if (!connectorProc.killed) {
+          console.log('Force killing connector process...');
+          connectorProc.kill('SIGKILL');
+        }
+      }, 5000);
+
+      return; // Exit early, don't wait for onProcessExit
     }
 
     const onProcessExit = new Promise((resolve, reject) => {
