@@ -1,31 +1,38 @@
 name: Border0 Connect
-description: SSH access to your GitHub Actions VM using Border0
+description: SSH access to your GitHub Actions VM using Border0 ephemeral connector
 author: Border0
 branding:
   icon: terminal
   color: orange
 inputs:
   token:
-    description: 'API token'
+    description: 'Border0 API token'
     required: true
   slack-webhook-url:
-    description: 'Sack webhook URL'
+    description: 'Slack webhook URL for notifications'
     required: false
     default: ''
   background-mode:
     description: 'Run in the background'
     required: false
     default: 'false'
-  clean-up-mode:
-    description: 'Perform cleanup only'
-    required: false
-    default: 'false'
   wait-for:
-    description: 'Wait for n minutes before cleaning up'
+    description: 'Wait for n minutes before exiting'
     required: false
     default: '15'
+  connector-name:
+    description: 'Override auto-generated connector name'
+    required: false
+    default: ''
+  builtin-socket-tags:
+    description: 'Tags for built-in socket (format: key1=value1,key2=value2)'
+    required: false
+    default: ''
+  include-github-tags:
+    description: 'Add GitHub context tags (repository, workflow, run_id, actor)'
+    required: false
+    default: 'false'
 
 runs:
-  using: 'node16'
+  using: 'node20'
   main: 'index.js'
-
