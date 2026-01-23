@@ -13,7 +13,7 @@ async function sendSlackMessage(slackWebhookUrl, messageBlocks) {
   }
 }
 
-function constructSlackMessage(workflowName, workflowRunUrl, actorName, connectorName, orgName) {
+function constructSlackMessage(workflowName, workflowRunUrl, actorName, connectorName) {
   return [
     {
       type: "section",
@@ -33,7 +33,7 @@ function constructSlackMessage(workflowName, workflowRunUrl, actorName, connecto
       type: "section",
       text: {
         type: "mrkdwn",
-        text: `\`border0 client ssh --connector ${connectorName}\` (org: ${orgName})`
+        text: `\`border0 client ssh ssh-${connectorName}\``
       }
     }
   ];
@@ -48,7 +48,6 @@ function printConnectionInfo(connectorName, sshUsername, slackWebhookUrl) {
   const workflowName = getEnvVar('GITHUB_WORKFLOW');
   const workflowRunUrl = `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`;
   const actorName = getEnvVar('GITHUB_ACTOR');
-  const orgName = 'your-org';
 
   console.log(`
 ================================================================================
@@ -71,7 +70,7 @@ The connector will automatically clean up when the workflow ends.
 
   if (slackWebhookUrl) {
     console.log('Sending Slack notification...');
-    const messageBlocks = constructSlackMessage(workflowName, workflowRunUrl, actorName, connectorName, orgName);
+    const messageBlocks = constructSlackMessage(workflowName, workflowRunUrl, actorName, connectorName);
     sendSlackMessage(slackWebhookUrl, messageBlocks)
       .then(() => console.log('Slack notification sent.'))
       .catch(error => console.error(`Slack notification failed: ${error.message}`));
@@ -135,7 +134,18 @@ async function startEphemeralConnector(env, connectorName, builtinSocketTags, in
 
   if (backgroundMode) {
     connectorProc.unref();
+
+    // Set up process group to prevent GitHub Actions from killing it
+    if (connectorProc.pid) {
+      try {
+        process.kill(-connectorProc.pid, 0); // Test if we can signal the process group
+      } catch (e) {
+        // Ignore errors, process might not have started yet
+      }
+    }
+
     console.log('Ephemeral connector started in background mode.');
+    console.log(`Process PID: ${connectorProc.pid}`);
   }
 
   printConnectionInfo(connectorName, sshUsername, slackWebhookUrl);
@@ -173,6 +183,11 @@ async function run() {
 
     if (backgroundMode) {
       console.log('Running in background mode. Connector will auto-cleanup when workflow ends.');
+      console.log('Note: In GitHub Actions, background processes may be terminated when the action step completes.');
+      console.log('Consider using a longer wait-for time instead of background mode for better reliability.');
+
+      // Add a small delay to ensure the connector has time to start
+      await new Promise(resolve => setTimeout(resolve, 3000));
       return;
     }
 
