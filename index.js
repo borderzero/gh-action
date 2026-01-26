@@ -138,7 +138,7 @@ async function startEphemeralConnector(env, connectorName, builtinSocketTags, in
     // Set up process group to prevent GitHub Actions from killing it
     if (connectorProc.pid) {
       try {
-        process.kill(-connectorProc.pid, 0); // Test if we can signal the process group
+        process.kill(-connectorProc.pid, 0);
       } catch (e) {
         // Ignore errors, process might not have started yet
       }
@@ -218,7 +218,7 @@ async function run() {
         }
       }, 5000);
 
-      return; // Exit early, don't wait for onProcessExit
+      return;
     }
 
     const onProcessExit = new Promise((resolve, reject) => {
