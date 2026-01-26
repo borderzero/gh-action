@@ -1,77 +1,9 @@
-const { spawn, execSync, spawnSync, execFileSync } = require('child_process');
+const { spawn, spawnSync } = require('child_process');
 const core = require('@actions/core');
 const exec = require('@actions/exec');
 const os = require('os');
 const fs = require('fs');
-const path = require('path');
 const axios = require('axios');
-
-async function queryAPI(token, socketName) {
-  const url = `https://api.border0.com/api/v1/socket/${socketName}`;
-  const headers = {
-    'accept': 'application/json',
-    'x-access-token': token
-  };
-
-  try {
-    const response = await axios.get(url, { headers });
-    return response.data;
-  } catch (error) {
-    console.error(`Failed to query API: ${error.message}`);
-    throw error;
-  }
-}
-
-async function addTagsToSocket(token, apiSocketData) {
-  const repositoryInfo = process.env.GITHUB_REPOSITORY.split('/');
-  const owner = repositoryInfo[0];
-  const repositoryName = repositoryInfo[1];
-  const socketName = apiSocketData.name;
-
-  try {
-    // Prepare the new tags
-    const workflowName = getEnvVar('GITHUB_WORKFLOW');;
-    const iconText = `${workflowName} action #${process.env.GITHUB_RUN_ID}`;
-    const newTags = {
-      border0_client_category: 'GitHub Actions',
-      border0_client_subcategory: process.env.GITHUB_REPOSITORY,
-      border0_client_icon: 'devicon-plain:githubactions',
-      provider_type: 'azure',
-      border0_client_icon_text: iconText
-    };
-
-
-
-    const updatedTags = { ...apiSocketData.tags, ...newTags };
-
-    // Prepare the updated socket data
-    const updatedSocketData = { ...apiSocketData, tags: updatedTags };
-    const url = `https://api.border0.com/api/v1/socket/${socketName}`;
-    const headers = {
-      'accept': 'application/json',
-      'x-access-token': token,
-    };
-
-    const response = await axios.put(url, updatedSocketData, { headers });
-    if (response.status !== 200) {
-      throw new Error(`Failed to update socket tags: ${response.data}`);
-    }
-
-    console.log(`Successfully updated tags for socket ${socketName}`);
-  } catch (error) {
-    console.error(`Failed to update tags: ${error.message}`);
-    //throw error;  // Re-throw the error to be handled by the calling function
-  }
-}
-
-function extractOrgName(responseData, socketName) {
-  const dnsName = responseData.dnsname;
-  const intermediateValue = dnsName.substring(socketName.length + 1);
-  const trailingString = ".border0.io";
-  const finalValue = intermediateValue.substring(0, intermediateValue.length - trailingString.length);
-
-  return finalValue;
-}
 
 async function sendSlackMessage(slackWebhookUrl, messageBlocks) {
   try {
@@ -81,8 +13,7 @@ async function sendSlackMessage(slackWebhookUrl, messageBlocks) {
   }
 }
 
-function constructSlackMessage(jobStatus, workflowName, workflowRunUrl, actorName, socketDnsName, socketOrgName) {
-  const iconEmoji = jobStatus === 'Success' ? ':heavy_check_mark:' : ':x:';
+function constructSlackMessage(workflowName, workflowRunUrl, actorName, connectorName) {
   return [
     {
       type: "section",
@@ -95,204 +26,213 @@ function constructSlackMessage(jobStatus, workflowName, workflowRunUrl, actorNam
       type: "section",
       text: {
         type: "mrkdwn",
-        text: `Hey, ${actorName}. Your github workflow is running Border0 Socket. You can click the link below to log in and troubleshoot:`
+        text: `Hey, ${actorName}. Your GitHub workflow is running with Border0 ephemeral connector. You can connect via Border0 client:`
       }
     },
     {
       type: "section",
       text: {
         type: "mrkdwn",
-        text: `https://client.border0.com/#/ssh/${socketDnsName}?org=${socketOrgName}`
+        text: `\`border0 client ssh ssh-${connectorName}\``
       }
     }
   ];
 }
 
-
-function printInfo(jobStatus, workflowName, workflowRunUrl, actorName, socketDnsName, socketOrgName, sshUsername, slackWebhookUrl) {
-  console.log(`
-
-  GitHub Workflow Run ${jobStatus}: ${workflowName} (${workflowRunUrl})
-
-Hey, ${actorName}. Your github workflow is running Border0 Socket. You can click the link below to log in and troubleshoot:
-https://client.border0.com/#/ssh/${socketDnsName}?org=${socketOrgName}
-
-Alternatively, use the following command to ssh into this GitHub VM:
-$> border0 client ssh ${sshUsername}@${socketDnsName}
-  `);
-  if (slackWebhookUrl) {
-    const messageBlocks = constructSlackMessage(jobStatus, workflowName, workflowRunUrl, actorName, socketDnsName, socketOrgName);
-    sendSlackMessage(slackWebhookUrl, messageBlocks)
-      .then(() => {
-        console.log('Message sent to Slack successfully.');
-      })
-      .catch(error => {
-        console.error(`Failed to send message to Slack: ${error.message}`);
-      });
-  } else {
-    console.log('Slack webhook URL not provided. Skipping Slack notification...');
-  }
+function getEnvVar(name, defaultValue = 'GitHubRunner') {
+  const value = process.env[name];
+  return value !== undefined ? value : defaultValue;
 }
 
-function getEnvVar(name) {
-  let value = process.env[name];
-  if (value === undefined) {
-    value = 'GitHubRunner';
-  }
-  return value;
-}
-
-async function createSocketIfNeeded(env, socketName, slackWebhookUrl, token) {
-  const githubActionPath = process.env.GITHUB_ACTION_PATH || '/tmp/';
-  const flagFile = path.join(githubActionPath, 'border0.socket-created');
-  if (fs.existsSync(flagFile)) {
-    console.log('Socket already created. Skipping creation...');
-    return;
-  }
-
-  if (!fs.existsSync('./border0')) {
-    const binaryUrl = 'https://download.border0.com/linux_amd64/border0 ';
-    console.log('border0 binary not found locally. Downloading...');
-    await exec.exec(`curl -s -LJO ${binaryUrl}`);
-    await exec.exec('chmod +x border0');
-  }
-
-  const sshUsername = os.userInfo().username;
-  const createSocketCommand = `./border0 socket create --type ssh --name ${socketName} --upstream_username ${sshUsername}`;
-  await exec.exec(createSocketCommand, [], { env });
-  fs.writeFileSync(flagFile, 'Socket created on ' + new Date().toISOString());
-
-  const apiSocketData = await queryAPI(token, socketName);
-  addTagsToSocket(token, apiSocketData);
-
-  const socketDnsName = apiSocketData.dnsname;
-  const socketOrgName = await extractOrgName(apiSocketData, socketName)
-  const jobStatus = process.env.GITHUB_JOB_STATUS || 'Success';
-  const workflowName = getEnvVar('GITHUB_WORKFLOW');;
+function printConnectionInfo(connectorName, sshUsername, slackWebhookUrl) {
+  const workflowName = getEnvVar('GITHUB_WORKFLOW');
   const workflowRunUrl = `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`;
   const actorName = getEnvVar('GITHUB_ACTOR');
 
+  console.log(`
+================================================================================
+Border0 Ephemeral Connector Started
+================================================================================
+
+GitHub Workflow: ${workflowName}
+Workflow Run: ${workflowRunUrl}
+Actor: ${actorName}
+
+Connect using the Border0 client:
+  border0 client ssh --connector ${connectorName}
+
+Or use the built-in SSH socket:
+  border0 client ssh ${sshUsername}@ssh-${connectorName}
+
+The connector will automatically clean up when the workflow ends.
+================================================================================
+`);
+
   if (slackWebhookUrl) {
-    console.log('Slack webhook URL provided. Sending Slack notification...');
-  } else {
-    console.log('Slack webhook URL not provided. Skipping Slack notification...');
+    console.log('Sending Slack notification...');
+    const messageBlocks = constructSlackMessage(workflowName, workflowRunUrl, actorName, connectorName);
+    sendSlackMessage(slackWebhookUrl, messageBlocks)
+      .then(() => console.log('Slack notification sent.'))
+      .catch(error => console.error(`Slack notification failed: ${error.message}`));
+  }
+}
+
+async function downloadBorder0Binary() {
+  if (fs.existsSync('./border0')) {
+    console.log('border0 binary already exists.');
+    return;
   }
 
-  await printInfo(jobStatus, workflowName, workflowRunUrl, actorName, socketDnsName, socketOrgName, sshUsername, slackWebhookUrl);
+  const binaryUrl = 'https://download.border0.com/linux_amd64/border0';
+  console.log('Downloading border0 binary...');
+  await exec.exec(`curl -s -LJO ${binaryUrl}`);
+  await exec.exec('chmod +x border0');
+  console.log('border0 binary downloaded and ready.');
+}
+
+function buildTagsArgument(builtinSocketTags, includeGithubTags) {
+  const tags = [];
+
+  if (builtinSocketTags) {
+    tags.push(builtinSocketTags);
+  }
+
+  if (includeGithubTags) {
+    const githubTags = [
+      `github_repository=${process.env.GITHUB_REPOSITORY || ''}`,
+      `github_workflow=${getEnvVar('GITHUB_WORKFLOW', '')}`,
+      `github_run_id=${process.env.GITHUB_RUN_ID || ''}`,
+      `github_actor=${getEnvVar('GITHUB_ACTOR', '')}`,
+      `github_ref=${process.env.GITHUB_REF || ''}`,
+      `github_sha=${process.env.GITHUB_SHA || ''}`
+    ];
+    tags.push(githubTags.join(','));
+  }
+
+  return tags.length > 0 ? tags.join(',') : null;
+}
+
+async function startEphemeralConnector(env, connectorName, builtinSocketTags, includeGithubTags, slackWebhookUrl, backgroundMode) {
+  await downloadBorder0Binary();
+
+  const sshUsername = os.userInfo().username;
+  const tagsArg = buildTagsArgument(builtinSocketTags, includeGithubTags);
+
+  let command = `./border0 connector start --ephemeral --name ${connectorName}`;
+  if (tagsArg) {
+    command += ` --builtin-socket-tags "${tagsArg}"`;
+  }
+
+  console.log(`Starting ephemeral connector: ${connectorName}`);
+
+  const connectorProc = spawn(command, {
+    shell: true,
+    env,
+    detached: backgroundMode,
+    stdio: backgroundMode ? 'ignore' : 'inherit'
+  });
+
+  if (backgroundMode) {
+    connectorProc.unref();
+
+    // Set up process group to prevent GitHub Actions from killing it
+    if (connectorProc.pid) {
+      try {
+        process.kill(-connectorProc.pid, 0);
+      } catch (e) {
+        // Ignore errors, process might not have started yet
+      }
+    }
+
+    console.log('Ephemeral connector started in background mode.');
+    console.log(`Process PID: ${connectorProc.pid}`);
+  }
+
+  printConnectionInfo(connectorName, sshUsername, slackWebhookUrl);
+
+  return connectorProc;
 }
 
 async function run() {
   try {
     const token = core.getInput('token');
-    const sshUsername = os.userInfo().username;
     const slackWebhookUrl = core.getInput('slack-webhook-url');
     const backgroundMode = core.getInput('background-mode') === 'true';
-    const cleanUP = core.getInput('clean-up-mode') === 'true';
     const waitForMinutes = parseInt(core.getInput('wait-for'), 10);
+    const connectorNameOverride = core.getInput('connector-name');
+    const builtinSocketTags = core.getInput('builtin-socket-tags');
+    const includeGithubTags = core.getInput('include-github-tags') === 'true';
+
     const env = {
       ...process.env,
-      BORDER0_ADMIN_TOKEN: token
+      BORDER0_TOKEN: token
     };
+
     const repoStr = process.env.GITHUB_REPOSITORY.replace(/\//g, '-');
-    // Adding run attempt to the socket name to avoid conflicts (based on community feedback)
-    const socketName = `${repoStr}-${process.env.GITHUB_RUN_ID}-${process.env.GITHUB_RUN_ATTEMPT}`;
-    const githubActionPath = process.env.GITHUB_ACTION_PATH || '/tmp/';
+    const connectorName = connectorNameOverride ||
+      `${repoStr}-${process.env.GITHUB_RUN_ID}-${process.env.GITHUB_RUN_ATTEMPT}`;
 
-    // We don't need to create a socket if we are running cleanup
-    if (!cleanUP) { await createSocketIfNeeded(env, socketName, slackWebhookUrl, token); }
+    const connectorProc = await startEphemeralConnector(
+      env,
+      connectorName,
+      builtinSocketTags,
+      includeGithubTags,
+      slackWebhookUrl,
+      backgroundMode
+    );
 
-    const cleanup = () => {
-      const cleanupFlagFile = path.join(githubActionPath, 'border0.cleaned-up');
-      if (fs.existsSync(cleanupFlagFile)) {
-        console.log('Cleanup has already ran. Skipping...');
-        return;
-      }
-      const deleteSocketCommand = `./border0 socket delete ${socketName}`;
-      try {
-        execSync(deleteSocketCommand, { env });
-        console.log(`Socket ${socketName} deleted`);
-        fs.writeFileSync(cleanupFlagFile, 'Cleanup completed on ' + new Date().toISOString());
-      } catch (error) {
-        console.error(`Failed to delete socket: ${error.message}`);
-      }
-      process.exit(0);
-    };
+    if (backgroundMode) {
+      console.log('Running in background mode. Connector will auto-cleanup when workflow ends.');
+      console.log('Note: In GitHub Actions, background processes may be terminated when the action step completes.');
+      console.log('Consider using a longer wait-for time instead of background mode for better reliability.');
 
-    if (cleanUP) {
-      console.log(`Running cleanup...`);
-      cleanup();
+      // Add a small delay to ensure the connector has time to start
+      await new Promise(resolve => setTimeout(resolve, 3000));
       return;
     }
 
-    let bgModeProc;
-    const isBoRunning = spawnSync('pgrep', ['-f', `sh -c ./border0 socket connect`]).status === 0;
-    if (!isBoRunning) {
-      const connectSocketCommand = `./border0 socket connect ${socketName} --sshserver --upstream_username ${sshUsername}`;
+    if (waitForMinutes > 0) {
+      console.log(`Waiting for ${waitForMinutes} minute(s)...`);
 
-      bgModeProc = spawn(connectSocketCommand, {
-        shell: true,
-        env,
-        detached: backgroundMode,
-        stdio: 'ignore'
-      });
-    }
+      const checkInterval = setInterval(() => {
+        const isRunning = spawnSync('pgrep', ['-f', 'border0 connector start']).status === 0;
+        if (!isRunning) {
+          console.log('Connector process has exited.');
+          clearInterval(checkInterval);
+          process.exit(0);
+        }
+      }, 10000);
 
-    let checkInterval;
-    const checkProcess = () => {
-      const isProcessRunning = spawnSync('pgrep', ['-f', `sh -c ./border0 socket connect`]).status === 0;
-      if (!isProcessRunning) {
-        clearInterval(checkInterval);
-        console.log('Process has exited early. Running cleanup...');
-        cleanup();
-      }
-    };
+      await new Promise(resolve => setTimeout(resolve, waitForMinutes * 60 * 1000));
+      clearInterval(checkInterval);
+      console.log('Wait time completed. Terminating connector...');
 
-    if (waitForMinutes > 0 && !backgroundMode) {
-      console.log(`Waiting for ${waitForMinutes} minute(s) before proceeding...`);
-      checkInterval = setInterval(checkProcess, 10000);
-      await new Promise(resolve => setTimeout(() => {
-        clearInterval(checkInterval);
-        resolve();
-      }, waitForMinutes * 60 * 1000));
-      cleanup();
+      // Kill the connector process
+      connectorProc.kill('SIGTERM');
+
+      // Give it a moment to exit gracefully, then force kill if needed
+      setTimeout(() => {
+        if (!connectorProc.killed) {
+          console.log('Force killing connector process...');
+          connectorProc.kill('SIGKILL');
+        }
+      }, 5000);
+
+      return;
     }
 
     const onProcessExit = new Promise((resolve, reject) => {
-      bgModeProc.on('exit', (code) => {
-        console.log(`Subprocess exited with code ${code}`);
+      connectorProc.on('exit', (code) => {
+        console.log(`Connector exited with code ${code}`);
         resolve();
       });
-      bgModeProc.on('error', (error) => {
-        console.error(`Subprocess error: ${error.message}`);
+      connectorProc.on('error', (error) => {
+        console.error(`Connector error: ${error.message}`);
         reject(error);
       });
     });
 
-    if (backgroundMode) {
-      bgModeProc.unref();
-    } else {
-      console.log(`Starting Border0 in the foreground, will give it ${waitForMinutes} minutes...`);
-      const onTimeout = new Promise(resolve => setTimeout(resolve, waitForMinutes * 60 * 1000));
-      await Promise.race([onProcessExit, onTimeout]);
-      console.log(`Time is UP! Running cleanup...`);
-      await cleanup();
-    }
-
-    if (backgroundMode) {
-      bgModeProc.on('exit', cleanup);
-    } else {
-      process.on('exit', cleanup);
-    }
-
-    process.on('SIGTERM', () => {
-      cleanup();
-      process.exit(0);
-    });
-
-    process.on('SIGINT', () => {
-      cleanup();
-      process.exit(0);
-    });
+    await onProcessExit;
 
   } catch (error) {
     core.setFailed(error.message);
